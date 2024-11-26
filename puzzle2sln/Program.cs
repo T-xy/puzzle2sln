@@ -25,7 +25,7 @@ namespace puzzle2sln
             public Side origOpp;
             public Side actOpp;
             public int isUsed = 0;
-            public int outputNumber = 0;
+            public short outputNumber = 0;
 
             public Side(Piece piece)
             {
@@ -412,7 +412,7 @@ namespace puzzle2sln
                 }
             } while (!ok);
         }
-   
+
         private static void Output(SolutionClass SC, int cycleLength, int metric)
         {
             using (StreamWriter sw = new StreamWriter("outp.txt", true))
@@ -458,16 +458,7 @@ namespace puzzle2sln
                 int solCount = skipSolving ? 0 : Solver.CountSolutions(SC.solution, SC.size, SC.SOLMIN, SC.PRETESTSEC);
 
                 SC.timer.Stop();
-                Console.Write(" ELAPSED " + SC.timer.ElapsedMilliseconds + "  ");
-
-
-                //timer = Stopwatch.StartNew();
-                //int tst = CountSolutions9(SC.solution, SC.size, 2);
-                //if (solCount != tst)
-                //{
-                //    Console.Write(" ERROR (" + tst + ")");
-                //}
-                //Console.Write(" ELAPSED " + timer.ElapsedMilliseconds + "  ");
+                Console.Write(" ELAPSED " + SC.timer.ElapsedMilliseconds + "  ");               
 
                 sw.WriteLine();
                 sw.Write("SolCount ");
@@ -502,8 +493,8 @@ namespace puzzle2sln
         class SolutionClass
         {
             public readonly Piece[] allPieces;
-            public readonly int[,] solution;
-            private readonly HashSet<(int, int, int, int)> seen = new HashSet<(int, int, int, int)>();
+            public readonly short[,] solution;
+            private readonly HashSet<ulong> seen = new HashSet<ulong>();
             public readonly int size;
             public readonly Side[] allSides;
             public readonly List<Side>[] sideCycles;
@@ -589,49 +580,47 @@ namespace puzzle2sln
                 return false;
             }
 
+            private static ulong ROR(ulong x, int n)
+            {
+                return (((x) >> (n)) | ((x) << (64 - (n))));
+            }
+
             public bool UpdateSolutionIsDuplicit()
             {
                 //AssignNumbersToPieces
-                for (int c = 0; c < sideCycles.Length; ++c)
+                for (int c = 0; c < sideCycles.Length;)
                 {
-                    var cycle = sideCycles[c];
+                    var cycle = sideCycles[c++];
                     for (int i = 0; i < cycle.Count; ++i)
                     {
-                        cycle[i].outputNumber = (i % 2) == 0 ? c + 1 : -(c + 1);
+                        cycle[i].outputNumber = (short)((i & 1) == 0 ? c : -c);
                     }
                 }
 
                 //UpdateSolution
                 seen.Clear();
-                int ip = 0;
-                foreach (var piece in allPieces)
+                for (int ip = 0; ip < allPieces.Length; ++ip)
                 {
-                    int ih = 0;
-                    foreach (var h in piece.sides)
+                    var piece = allPieces[ip];
+                    var sides = piece.sides;
+                    ulong bin = 0;
+                    for (int iside = 0; iside < sides.Length; ++iside)
                     {
-                        solution[ip, ih++] = h.outputNumber;
+                        var side = sides[iside];
+                        bin |= ((ulong)side.outputNumber & 0xFFFF) << (iside << 4);
+                        solution[ip, iside] = side.outputNumber;
                     }
 
-                    //IsDuplicit
-                    int a0 = solution[ip, 0];
-                    int a1 = solution[ip, 1];
-                    int a2 = solution[ip, 2];
-                    int a3 = solution[ip, 3];
-                    for (int j = 0; j < 4; ++j)
+                    //IsDuplicit                   
+                    if (!seen.Add(bin)
+                     || !seen.Add(ROR(bin, 16))
+                     || !seen.Add(ROR(bin, 32))
+                     || !seen.Add(ROR(bin, 48))
+                        )
                     {
-                        if (!seen.Add((a0, a1, a2, a3)))
-                        {
-                            Fix(piece, bestCycle);
-                            return true;
-                        }
-                        int tmp = a0;
-                        a0 = a1;
-                        a1 = a2;
-                        a2 = a3;
-                        a3 = tmp;
+                        Fix(piece, bestCycle);
+                        return true;
                     }
-
-                    ip++;
                 }
 
                 return false;
@@ -649,7 +638,7 @@ namespace puzzle2sln
                     .Select(h => h.piece)
                     .Distinct()
                     .ToArray();
-                solution = new int[size * size, 4];
+                solution = new short[size * size, 4];
                 sideCycles = new List<Side>[allSides.Length / 2];
                 for (int i = 0; i < sideCycles.Length; ++i)
                 {

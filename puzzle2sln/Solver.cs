@@ -28,7 +28,7 @@ namespace puzzle2sln
             }
             return (int)b;
         }
-       
+
         private static IEnumerable<uint> GenerateEmpty(uint piece)
         {
             yield return piece;
@@ -99,11 +99,11 @@ namespace puzzle2sln
             return (ret, MatchPieces.ToArray());
         }
 
-        private static uint[] GetPieces(int[,] solution)
+        private static uint[] GetPieces(short[,] solution)
         {
-            List<uint> Pieces = new List<uint>();
+            uint[] pieces = new uint[solution.GetLength(0)];
 
-            for (int i = 0; i < solution.GetLength(0); ++i)
+            for (int i = 0; i < pieces.Length; ++i)
             {
                 uint p0 = (uint)(solution[i, 0] & 0xFF);
                 uint p1 = (uint)(solution[i, 1] & 0xFF);
@@ -112,31 +112,21 @@ namespace puzzle2sln
 
                 uint p = p0 | (p1 << 8) | (p2 << 16) | (p3 << 24);
 
-                Pieces.Add(p);
+                pieces[i] = p;
             }
 
-            return Pieces.ToArray();
+            return pieces;
         }
 
-        private static bool IsDuplicit(int[,] solution, int size)
+        private static bool IsDuplicit(uint[] pieces)
         {
-            HashSet<(int, int, int, int)> seen = new HashSet<(int, int, int, int)>();
-            for (int i = 0; i < size * size; ++i)
+            HashSet<uint> seen = new HashSet<uint>(pieces.Length << 2);
+            foreach (var piece in pieces)
             {
-                int a0 = solution[i, 0];
-                int a1 = solution[i, 1];
-                int a2 = solution[i, 2];
-                int a3 = solution[i, 3];
-
-                for (int j = 0; j < 4; ++j)
-                {
-                    if (!seen.Add((a0, a1, a2, a3))) { return true; }
-                    int tmp = a0;
-                    a0 = a1;
-                    a1 = a2;
-                    a2 = a3;
-                    a3 = tmp;
-                }
+                if (!seen.Add(piece)) { return true; }
+                if (!seen.Add(ROR(piece, 8))) { return true; }
+                if (!seen.Add(ROR(piece, 16))) { return true; }
+                if (!seen.Add(ROR(piece, 24))) { return true; }
             }
             return false;
         }
@@ -383,13 +373,14 @@ namespace puzzle2sln
             }
         }
 
-        public static int CountSolutions(int[,] solution, int size, int minutesLimit, int secondsPretestLimit)
+        public static int CountSolutions(short[,] solution, int size, int minutesLimit, int secondsPretestLimit)
         {
             foreach (int e in solution)
             {
                 if (e < -127 || e > 127) { return -1; } // out of range for this solver
             }
-            if (IsDuplicit(solution, size)) { return 888; } // duplicit pieces -> more than 2 solutions
+            var pieces = GetPieces(solution);
+            if (IsDuplicit(pieces)) { return 888; } // duplicit pieces -> more than 2 solutions
             var totalEndTime = DateTime.Now.AddMinutes(minutesLimit);
 
             var S = new State(size)
@@ -397,7 +388,7 @@ namespace puzzle2sln
                 solcnt = 0,
                 cyclcount = 0,
                 totalCyclCount = 0,
-                Pieces = GetPieces(solution)
+                Pieces = pieces
             };
 
             (S.MatchPiecesStart, S.MatchPieceIndexes) = BuildDictionary(S.Pieces);
@@ -477,6 +468,6 @@ namespace puzzle2sln
             //Console.Write(" CYCLCOUNT " + S.cyclcount + " ");
 
             return S.solcnt;
-        }       
+        }
     }
 }
